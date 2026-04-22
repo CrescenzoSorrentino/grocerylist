@@ -1,0 +1,158 @@
+<script setup>
+// STATO GLOBALE — questi dati appartengono all'intera app.
+// Tutti i componenti figli li ricevono da qui tramite props.
+
+// L'array principale: contiene tutti gli elementi della lista.
+// Inizia vuoto; viene popolato da localStorage non appena la pagina è pronta.
+const items = ref([]);
+
+// Le categorie disponibili: una costante, non cambierà mai durante l'uso.
+const categories = ["Fruit", "Dairy", "Meat", "Bakery", "Drinks", "Other"];
+
+// onMounted si esegue solo dopo che la pagina è caricata nel browser,
+// dove localStorage esiste. Carica gli elementi salvati in precedenza.
+// Se non c'è nulla salvato, JSON.parse riceve "[]" e restituisce un array vuoto.
+onMounted(() => {
+  items.value = JSON.parse(localStorage.getItem("items") || "[]");
+});
+
+// watch osserva "items" e, ogni volta che cambia (anche in profondità),
+// salva automaticamente l'array aggiornato nel localStorage.
+// { deep: true } è necessario perché items è un array di oggetti:
+// senza, Vue non accorgerebbe dei cambiamenti interni (es. item.done = true).
+watch(
+  items,
+  (newItems) => {
+    localStorage.setItem("items", JSON.stringify(newItems));
+  },
+  { deep: true },
+);
+
+// Mette in maiuscolo la prima lettera del testo inserito dall'utente.
+function capitalize(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+// Riceve l'evento "add" da AddBar con { name, category } e aggiunge
+// il nuovo elemento all'array. "done: false" perché non è ancora spuntato.
+function addItem({ name, category }) {
+  items.value.push({ name: capitalize(name), done: false, category });
+}
+
+// Riceve l'evento "remove" con l'indice dell'elemento da eliminare.
+// splice(indice, 1) rimuove esattamente 1 elemento in quella posizione.
+function removeItem(index) {
+  items.value.splice(index, 1);
+}
+
+// Riceve l'evento "toggle" e inverte lo stato done dell'elemento.
+// Se era false diventa true, e viceversa.
+function toggleItem(index) {
+  items.value[index].done = !items.value[index].done;
+}
+
+// computed ricalcola "grouped" automaticamente ogni volta che "items" cambia.
+// Trasforma l'array piatto in un oggetto raggruppato per categoria, es:
+// { Dairy: [{...}, {...}], Fruit: [{...}] }
+// reduce costruisce questo oggetto partendo da {} (l'accumulatore "acc").
+// Aggiunge anche "index" a ogni elemento così i figli sanno dove agire nell'array originale.
+const grouped = computed(() => {
+  return items.value.reduce((acc, item, index) => {
+    if (!acc[item.category]) acc[item.category] = [];
+    acc[item.category].push({ ...item, index });
+    return acc;
+  }, {});
+});
+</script>
+
+<template>
+  <main>
+    <h1>Grocery List</h1>
+    <p class="subtitle">
+      Plan your shop, stick to the list. Spend less, waste nothing.
+    </p>
+
+    <div class="card">
+
+      <!-- Passa le categorie come prop e ascolta l'evento "add". -->
+      <AddBar :categories="categories" @add="addItem" />
+
+      <!-- Mostra i gruppi solo se la lista non è vuota. -->
+      <div v-if="items.length > 0">
+        <!-- v-for su un oggetto: "groupItems" è l'array degli elementi,
+             "category" è la chiave (nome della categoria).
+             Passa i dati verso il basso e ascolta gli eventi verso l'alto. -->
+        <CategoryGroup
+          v-for="(groupItems, category) in grouped"
+          :key="category"
+          :category="category"
+          :items="groupItems"
+          @toggle="toggleItem"
+          @remove="removeItem"
+        />
+      </div>
+
+    </div>
+
+    <!-- Messaggio visibile solo quando la lista è completamente vuota. -->
+    <p v-if="items.length === 0" class="empty">Your list is empty.</p>
+  </main>
+</template>
+
+<style scoped>
+main {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  padding: 48px 16px 40px;
+
+  @media (min-width: 640px) {
+    justify-content: center;
+    padding: 40px 20px;
+  }
+}
+
+h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 8px;
+  text-wrap: balance;
+
+  @media (min-width: 640px) {
+    font-size: 2.5rem;
+  }
+}
+
+.subtitle {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  margin-top: -8px;
+  margin-bottom: 4px;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.card {
+  width: 100%;
+  max-width: 640px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+
+  &:focus-within {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  }
+}
+
+.empty {
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+</style>
