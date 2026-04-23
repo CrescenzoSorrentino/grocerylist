@@ -1,5 +1,5 @@
 <script setup>
-import { Notebook, NotepadText, Trash2 } from "lucide-vue-next";
+import { NotepadText, Trash2 } from "lucide-vue-next";
 
 // PROPS — dati che questo componente riceve dall'esterno (dal genitore).
 // "item" è un oggetto con questa forma: { name, done, category, note, index }.
@@ -29,14 +29,16 @@ const emit = defineEmits(["toggle", "note", "update-note", "remove"]);
     <!-- Nome dell'elemento, con le doppie graffe per mostrare il valore della variabile. -->
     <span>{{ item.name }}</span>
 
-    <button class="btn-note" @click="emit('note', item.index)">
-      <NotepadText :size="15" />
-    </button>
+    <div class="item-actions">
+      <button class="btn-note" @click="emit('note', item.index)">
+        <NotepadText :size="15" />
+      </button>
 
-    <!-- Pulsante cestino: al click lancia "remove" con l'indice dell'elemento. -->
-    <button class="btn-remove" @click="emit('remove', item.index)">
-      <Trash2 :size="15" />
-    </button>
+      <!-- Pulsante cestino: al click lancia "remove" con l'indice dell'elemento. -->
+      <button class="btn-remove" @click="emit('remove', item.index)">
+        <Trash2 :size="15" />
+      </button>
+    </div>
 
   </li>
 
@@ -87,6 +89,11 @@ li.done span {
   color: var(--color-muted);
 }
 
+.item-actions {
+  display: flex;
+  align-items: center;
+}
+
 .btn-note,
 .btn-remove {
   display: inline-flex;
@@ -112,7 +119,13 @@ li.done span {
 }
 
 .note-row {
+  min-height: unset;
   padding: 0 20px 12px;
+
+  /* disabilita l'hover ereditato dalla regola li generale */
+  &:hover {
+    background: none;
+  }
 }
 
 .note-input {
