@@ -43,7 +43,13 @@ function addItem({ name, category }) {
     (i) => i.name.toLowerCase() === normalized.toLowerCase(),
   );
   if (duplicate) return;
-  items.value.push({ name: normalized, done: false, category });
+  items.value.push({ name: normalized, done: false, category, note: "" });
+}
+
+// Riceve l'evento "toggle" e inverte lo stato done dell'elemento.
+// Se era false diventa true, e viceversa.
+function toggleItem(index) {
+  items.value[index].done = !items.value[index].done;
 }
 
 // Riceve l'evento "remove" con l'indice dell'elemento da eliminare.
@@ -52,11 +58,22 @@ function removeItem(index) {
   items.value.splice(index, 1);
 }
 
-// Riceve l'evento "toggle" e inverte lo stato done dell'elemento.
-// Se era false diventa true, e viceversa.
-function toggleItem(index) {
-  items.value[index].done = !items.value[index].done;
+// Indice dell'item con il pannello nota aperto. null significa nessuno aperto.
+// Un solo item alla volta può avere la nota visibile.
+const editingNoteIndex = ref(null);
+
+// Apre il pannello nota per l'item cliccato.
+// Se l'item era già aperto lo chiude (comportamento toggle).
+function noteItem(index) {
+  editingNoteIndex.value = editingNoteIndex.value === index ? null : index;
 }
+
+// Riceve l'evento "update-note" con l'indice dell'item e il testo scritto dall'utente.
+// Salva il testo direttamente nell'array; il watch lo persiste in localStorage.
+function updateNote(index, text) {
+  items.value[index].note = text;
+}
+
 
 // computed ricalcola "grouped" automaticamente ogni volta che "items" cambia.
 // Trasforma l'array piatto in un oggetto raggruppato per categoria, es:
@@ -94,7 +111,10 @@ const grouped = computed(() => {
           :key="category"
           :category="category"
           :items="groupItems"
+          :editing-note-index="editingNoteIndex"
           @toggle="toggleItem"
+          @note="noteItem"
+          @update-note="updateNote"
           @remove="removeItem"
         />
       </div>

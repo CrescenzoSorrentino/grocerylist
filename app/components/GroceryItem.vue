@@ -1,18 +1,19 @@
 <script setup>
-import { Trash2 } from "lucide-vue-next";
+import { Notebook, NotepadText, Trash2 } from "lucide-vue-next";
 
 // PROPS — dati che questo componente riceve dall'esterno (dal genitore).
-// "item" è un oggetto con questa forma: { name, done, category, index }
+// "item" è un oggetto con questa forma: { name, done, category, note, index }.
+// "editingNoteIndex" arriva da index.vue (passando per CategoryGroup): se vale
+// lo stesso indice di questo item, il campo nota viene mostrato.
 // Le props non si modificano qui dentro: si leggono e basta.
 defineProps({
   item: Object,
+  editingNoteIndex: Number,
 });
 
-// EMIT — il modo in cui questo componente comunica col genitore.
-// Non può modificare i dati direttamente, quindi lancia un evento verso l'alto
-// e dice "ehi, l'utente ha fatto qualcosa, pensaci tu".
-// Dichiariamo i due eventi possibili: "toggle" e "remove".
-const emit = defineEmits(["toggle", "remove"]);
+// EMIT — eventi che questo componente lancia verso il genitore.
+// "update-note" passa due argomenti: l'indice dell'item e il testo scritto.
+const emit = defineEmits(["toggle", "note", "update-note", "remove"]);
 </script>
 
 <template>
@@ -28,11 +29,26 @@ const emit = defineEmits(["toggle", "remove"]);
     <!-- Nome dell'elemento, con le doppie graffe per mostrare il valore della variabile. -->
     <span>{{ item.name }}</span>
 
+    <button class="btn-note" @click="emit('note', item.index)">
+      <NotepadText :size="15" />
+    </button>
+
     <!-- Pulsante cestino: al click lancia "remove" con l'indice dell'elemento. -->
     <button class="btn-remove" @click="emit('remove', item.index)">
       <Trash2 :size="15" />
     </button>
 
+  </li>
+
+  <!-- Campo nota: visibile solo quando editingNoteIndex corrisponde a questo item. -->
+  <li v-if="editingNoteIndex === item.index" class="note-row">
+    <input
+      class="note-input"
+      type="text"
+      placeholder="Add a note..."
+      :value="item.note"
+      @input="emit('update-note', item.index, $event.target.value)"
+    />
   </li>
 </template>
 
@@ -71,6 +87,7 @@ li.done span {
   color: var(--color-muted);
 }
 
+.btn-note,
 .btn-remove {
   display: inline-flex;
   align-items: center;
@@ -84,11 +101,29 @@ li.done span {
   border-radius: 12px;
   transition: color 0.2s;
   touch-action: manipulation;
+}
 
+.btn-remove {
   @media (hover: hover) {
     &:hover {
       color: var(--color-danger);
     }
   }
+}
+
+.note-row {
+  padding: 0 20px 12px;
+}
+
+.note-input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  outline: none;
+  font-size: 0.875rem;
+  font-family: inherit;
+  background: transparent;
+  color: var(--color-muted);
+  padding: 4px 0;
 }
 </style>
