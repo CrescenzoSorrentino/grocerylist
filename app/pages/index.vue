@@ -28,15 +28,22 @@ watch(
   { deep: true },
 );
 
-// Mette in maiuscolo la prima lettera del testo inserito dall'utente.
-function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
+// Normalizza il testo: trim, lowercase, poi prima lettera uppercase.
+// Garantisce che "mela", "Mela", "MELA" diventino tutti "Mela".
+function normalize(str) {
+  const s = str.trim().toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 // Riceve l'evento "add" da AddBar con { name, category } e aggiunge
-// il nuovo elemento all'array. "done: false" perché non è ancora spuntato.
+// il nuovo elemento all'array solo se non esiste già (confronto case-insensitive).
 function addItem({ name, category }) {
-  items.value.push({ name: capitalize(name), done: false, category });
+  const normalized = normalize(name);
+  const duplicate = items.value.some(
+    (i) => i.name.toLowerCase() === normalized.toLowerCase(),
+  );
+  if (duplicate) return;
+  items.value.push({ name: normalized, done: false, category });
 }
 
 // Riceve l'evento "remove" con l'indice dell'elemento da eliminare.
