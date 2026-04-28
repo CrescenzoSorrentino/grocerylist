@@ -1,331 +1,565 @@
 <script setup>
-import { Share2, Check } from "lucide-vue-next";
+import { Share2, Check, Undo2, Trash2, MoreHorizontal } from "lucide-vue-next";
 
-// ─── STATO ───────────────────────────────────────────────────────────────────
+const store = useGroceryStore();
+const menuOpen = ref(false);
 
-// L'array principale: contiene tutti gli elementi della lista.
-// Inizia vuoto; viene popolato da localStorage non appena la pagina è pronta.
-const items = ref([]);
+onMounted(() => store.checkImportFromUrl());
 
-// Le categorie disponibili: una costante, non cambierà mai durante l'uso.
-const categories = ["Fruit", "Dairy", "Meat", "Bakery", "Drinks", "Other"];
-
-// Lista ricevuta tramite URL (?data=...). null = nessun import in attesa.
-const pendingImport = ref(null);
-
-// true per 2 secondi dopo aver copiato il link, usato per il feedback visivo.
-const copied = ref(false);
-
-// Indice dell'item con il pannello nota aperto. null = nessuno aperto.
-// Un solo item alla volta può avere la nota visibile.
-const editingNoteIndex = ref(null);
-
-// ─── LIFECYCLE ───────────────────────────────────────────────────────────────
-
-// onMounted si esegue solo dopo che la pagina è caricata nel browser,
-// dove localStorage esiste. Carica gli elementi salvati in precedenza.
-// Se non c'è nulla salvato, JSON.parse riceve "[]" e restituisce un array vuoto.
-onMounted(() => {
-  items.value = JSON.parse(localStorage.getItem("items") || "[]");
-
-  // Se l'URL contiene ?data=..., decodifica la lista e la mette in attesa di conferma.
-  // try/catch protegge da URL malformati o manomessi.
-  const params = new URLSearchParams(location.search);
-  const data = params.get("data");
-  if (data) {
-    try {
-      pendingImport.value = JSON.parse(decodeURIComponent(data));
-    } catch {
-      // dato non valido, ignora silenziosamente
-    }
-  }
-});
-
-// watch osserva "items" e, ogni volta che cambia (anche in profondità),
-// salva automaticamente l'array aggiornato nel localStorage.
-// { deep: true } è necessario perché items è un array di oggetti:
-// senza, Vue non accorgerebbe dei cambiamenti interni (es. item.done = true).
-watch(
-  items,
-  (newItems) => {
-    localStorage.setItem("items", JSON.stringify(newItems));
-  },
-  { deep: true },
+// Evita di chiamare store.items.find() 3 volte nel template
+const editingItem = computed(() =>
+  store.items.find(i => i.id === store.editingNoteId) ?? null
 );
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function closeMenu() { menuOpen.value = false; }
 
-// Normalizza il testo: trim, lowercase, poi prima lettera uppercase.
-// Garantisce che "mela", "Mela", "MELA" diventino tutti "Mela".
-function normalize(str) {
-  const s = str.trim().toLowerCase();
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-// ─── GESTORI EVENTI ──────────────────────────────────────────────────────────
-
-// Riceve l'evento "add" da AddBar con { name, category } e aggiunge
-// il nuovo elemento all'array solo se non esiste già (confronto case-insensitive).
-function addItem({ name, category }) {
-  const normalized = normalize(name);
-  const duplicate = items.value.some(
-    (i) => i.name.toLowerCase() === normalized.toLowerCase(),
-  );
-  if (duplicate) return;
-  items.value.push({ name: normalized, done: false, category, note: "" });
-}
-
-// Riceve l'evento "toggle" e inverte lo stato done dell'elemento.
-// Se era false diventa true, e viceversa.
-function toggleItem(index) {
-  items.value[index].done = !items.value[index].done;
-}
-
-// Riceve l'evento "remove" con l'indice dell'elemento da eliminare.
-// splice(indice, 1) rimuove esattamente 1 elemento in quella posizione.
-function removeItem(index) {
-  items.value.splice(index, 1);
-}
-
-// Apre il pannello nota per l'item cliccato.
-// Se l'item era già aperto lo chiude (comportamento toggle).
-function noteItem(index) {
-  editingNoteIndex.value = editingNoteIndex.value === index ? null : index;
-}
-
-// Riceve l'evento "update-note" con l'indice dell'item e il testo scritto dall'utente.
-// Salva il testo direttamente nell'array; il watch lo persiste in localStorage.
-function updateNote(index, text) {
-  items.value[index].note = text;
-}
-
-// Codifica la lista corrente nell'URL e copia il link negli appunti.
-// Mostra "Copied!" per 2 secondi come conferma visiva.
-async function shareList() {
-  const data = encodeURIComponent(JSON.stringify(items.value));
-  const url = `${location.origin}${location.pathname}?data=${data}`;
-  await navigator.clipboard.writeText(url);
-  copied.value = true;
-  setTimeout(() => (copied.value = false), 2000);
-}
-
-// Importa la lista ricevuta, resettando "done" a false per ogni item
-// perché il contatto parte da una lista fresca.
-// Pulisce l'URL dopo l'import per evitare re-import al refresh.
-function importList() {
-  items.value = pendingImport.value.map((item) => ({ ...item, done: false }));
-  pendingImport.value = null;
-  history.replaceState(null, "", location.pathname);
-}
-
-// Scarta la lista ricevuta senza importarla e pulisce l'URL.
-function dismissImport() {
-  pendingImport.value = null;
-  history.replaceState(null, "", location.pathname);
-}
-
-// ─── COMPUTED ─────────────────────────────────────────────────────────────────
-
-// Trasforma l'array piatto in un oggetto raggruppato per categoria, es:
-// { Dairy: [{...}, {...}], Fruit: [{...}] }
-// reduce costruisce questo oggetto partendo da {} (l'accumulatore "acc").
-// Aggiunge anche "index" a ogni elemento così i figli sanno dove agire nell'array originale.
-const grouped = computed(() => {
-  return items.value.reduce((acc, item, index) => {
-    if (!acc[item.category]) acc[item.category] = [];
-    acc[item.category].push({ ...item, index });
-    return acc;
-  }, {});
-});
+function menuUndo()      { store.undo();      closeMenu(); }
+function menuClearDone() { store.clearDone(); closeMenu(); }
+async function menuShare() { await store.shareList(); closeMenu(); }
 </script>
 
 <template>
-  <main>
-    <div class="title-row">
+
+  <!-- ── Header fisso ── -->
+  <header class="app-header">
+    <div class="header-inner">
       <h1>Grocery List</h1>
-      <!-- Icona share accanto al titolo: visibile solo se ci sono item. -->
-      <button
-        v-if="items.length > 0"
-        class="share-btn"
-        @click="shareList"
-      >
-        <Check v-if="copied" :size="16" />
+      <div class="header-actions">
+        <!-- Desktop: azioni dirette -->
+        <div class="desktop-actions">
+          <button v-if="store.canUndo" class="action-btn" title="Undo" @click="menuUndo">
+            <Undo2 :size="17" />
+          </button>
+          <button v-if="store.hasDone" class="action-btn" title="Clear completed" @click="menuClearDone">
+            <Trash2 :size="17" />
+          </button>
+          <button v-if="store.items.length > 0" class="action-btn" title="Share" @click="menuShare">
+            <Check v-if="store.copied" :size="17" />
+            <Share2 v-else :size="17" />
+          </button>
+        </div>
+        <!-- Mobile: tre puntini -->
+        <button class="menu-btn" @click="menuOpen = true">
+          <MoreHorizontal :size="20" />
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Contenuto scrollabile ── -->
+  <main class="content">
+
+    <!-- Banner import -->
+    <div v-if="store.pendingImport" class="import-banner">
+      <p>Received a list with {{ store.pendingImport.length }} items.</p>
+      <div class="import-actions">
+        <button class="btn-primary" @click="store.importList()">Import</button>
+        <button class="btn-ghost" @click="store.dismissImport()">Dismiss</button>
+      </div>
+    </div>
+
+    <!-- Lista -->
+    <div v-if="store.items.length > 0" class="groups">
+      <CategoryGroup
+        v-for="(groupItems, category) in store.grouped"
+        :key="category"
+        :category="category"
+        :items="groupItems"
+      />
+    </div>
+
+    <!-- Stato vuoto -->
+    <div v-else class="empty">
+      <p>Your list is empty.</p>
+      <p class="empty-hint">Add something below to get started.</p>
+    </div>
+
+  </main>
+
+  <!-- ── Input fisso in basso ── -->
+  <AddBar />
+
+  <!-- ── Toast ── -->
+  <Transition name="toast">
+    <div v-if="store.copied" class="toast">Link copied!</div>
+  </Transition>
+
+  <!-- ── Backdrop menu ── -->
+  <Transition name="fade">
+    <div v-if="menuOpen" class="backdrop" @click="closeMenu" />
+  </Transition>
+
+  <!-- ── Backdrop nota ── -->
+  <Transition name="fade">
+    <div v-if="store.editingNoteId !== null" class="backdrop" @click="store.toggleNote(store.editingNoteId)" />
+  </Transition>
+
+  <!-- ── Pannello item ── -->
+  <Transition name="slide-up">
+    <div v-if="store.editingNoteId !== null" class="note-sheet">
+      <div class="menu-handle" />
+      <p class="note-sheet-title">{{ editingItem?.name }}</p>
+      <textarea
+        class="note-textarea"
+        placeholder="Add a note..."
+        :value="editingItem?.note"
+        autofocus
+        @input="store.updateNote(store.editingNoteId, $event.target.value)"
+        @keyup.escape="store.toggleNote(store.editingNoteId)"
+      />
+      <div class="note-actions">
+        <button class="note-delete" @click="store.deleteAndClose()">
+          Delete item
+        </button>
+        <div class="note-actions-right">
+          <button
+            v-if="editingItem?.note"
+            class="note-clear"
+            @click="store.updateNote(store.editingNoteId, '')"
+          >
+            Clear note
+          </button>
+          <button class="note-done" @click="store.toggleNote(store.editingNoteId)">Done</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ── Menu a tendina dal basso ── -->
+  <Transition name="slide-up">
+    <div v-if="menuOpen" class="menu-sheet">
+      <div class="menu-handle" />
+
+      <button v-if="store.canUndo" class="menu-item" @click="menuUndo">
+        <Undo2 :size="18" />
+        <span>Undo last action</span>
+      </button>
+
+      <button v-if="store.hasDone" class="menu-item menu-item--danger" @click="menuClearDone">
+        <Trash2 :size="18" />
+        <span>Clear completed</span>
+      </button>
+
+      <button v-if="store.items.length > 0" class="menu-item" @click="menuShare">
+        <Check v-if="store.copied" :size="18" />
         <Share2 v-else :size="18" />
-        <span v-if="copied">Copied!</span>
+        <span>{{ store.copied ? 'Link copied!' : 'Share list' }}</span>
+      </button>
+
+      <button class="menu-item menu-item--cancel" @click="closeMenu">
+        Cancel
       </button>
     </div>
-    <p class="subtitle">
-      Plan your shop, stick to the list. Spend less, waste nothing.
-    </p>
+  </Transition>
 
-    <!-- Banner di import: compare solo quando si apre un link condiviso. -->
-    <div v-if="pendingImport" class="import-banner">
-      <p>You received a list with {{ pendingImport.length }} items. Import it?</p>
-      <div class="import-actions">
-        <button @click="importList">Import</button>
-        <button @click="dismissImport">Dismiss</button>
-      </div>
-    </div>
-
-    <div class="card">
-
-      <!-- Passa le categorie come prop e ascolta l'evento "add". -->
-      <AddBar :categories="categories" @add="addItem" />
-
-      <!-- Mostra i gruppi solo se la lista non è vuota. -->
-      <div v-if="items.length > 0">
-        <!-- v-for su un oggetto: "groupItems" è l'array degli elementi,
-             "category" è la chiave (nome della categoria).
-             Passa i dati verso il basso e ascolta gli eventi verso l'alto. -->
-        <CategoryGroup
-          v-for="(groupItems, category) in grouped"
-          :key="category"
-          :category="category"
-          :items="groupItems"
-          :editing-note-index="editingNoteIndex"
-          @toggle="toggleItem"
-          @note="noteItem"
-          @update-note="updateNote"
-          @remove="removeItem"
-        />
-      </div>
-
-    </div>
-
-    <!-- Messaggio visibile solo quando la lista è completamente vuota. -->
-    <p v-if="items.length === 0" class="empty">Your list is empty.</p>
-
-    <AppFooter />
-  </main>
 </template>
 
 <style scoped>
-main {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 48px 16px 40px;
-
-  @media (min-width: 640px) {
-    justify-content: center;
-    padding: 40px 20px;
-  }
+/* ── Header ── */
+.app-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-h);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  z-index: 50;
 }
 
-.title-row {
+.header-inner {
+  max-width: 640px;
+  margin: 0 auto;
+  height: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
+  justify-content: space-between;
+  padding: 0 20px;
+
+  @media (min-width: 768px) {
+    max-width: 960px;
+    padding: 0 24px;
+  }
+
+  @media (min-width: 1200px) {
+    max-width: 1280px;
+  }
 }
 
 h1 {
-  font-size: 1.75rem;
+  font-size: 1.15rem;
   font-weight: 700;
-  letter-spacing: -0.5px;
-  text-wrap: balance;
+  letter-spacing: -0.3px;
+}
 
-  @media (min-width: 640px) {
-    font-size: 2.5rem;
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.desktop-actions {
+  display: none;
+  align-items: center;
+  gap: 4px;
+
+  @media (min-width: 768px) {
+    display: flex;
   }
 }
 
-.subtitle {
-  color: var(--color-muted);
-  font-size: 0.9rem;
-  margin-top: -8px;
-  margin-bottom: 4px;
-  text-align: center;
-  text-wrap: balance;
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  transition: color 0.15s, background 0.15s;
+
+  @media (hover: hover) {
+    &:hover {
+      color: var(--text);
+      background: var(--bg-subtle);
+    }
+  }
 }
 
-.card {
-  width: 100%;
+.menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  transition: background 0.15s;
+
+  @media (min-width: 768px) {
+    display: none;
+  }
+
+  @media (hover: hover) {
+    &:hover { background: var(--bg-subtle); }
+  }
+}
+
+/* ── Contenuto ── */
+.content {
+  padding-top: calc(var(--header-h) + 8px);
+  padding-bottom: calc(var(--bottom-h) + 16px);
+  min-height: 100vh;
   max-width: 640px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  overflow: hidden;
-  transition: box-shadow 0.2s;
+  margin: 0 auto;
 
-  &:focus-within {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  @media (min-width: 768px) {
+    max-width: 960px;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  @media (min-width: 1200px) {
+    max-width: 1280px;
   }
 }
 
-.empty {
-  color: var(--color-muted);
-  font-size: 0.95rem;
+/* ── Griglia categorie ── */
+.groups {
+  @media (min-width: 768px) {
+    column-count: 2;
+    column-gap: 40px;
+  }
+
+  @media (min-width: 1200px) {
+    column-count: 3;
+  }
 }
 
+/* ── Import banner ── */
 .import-banner {
-  width: 100%;
-  max-width: 640px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  margin: 16px 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 16px 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 
-  p {
-    font-size: 0.9rem;
-    color: var(--color-text);
-    margin: 0;
-  }
+  p { font-size: 0.9rem; }
 }
 
-.import-actions {
+.import-actions { display: flex; gap: 8px; }
+
+.btn-primary {
+  padding: 8px 20px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-ghost {
+  padding: 8px 20px;
+  background: none;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ── Stato vuoto ── */
+.empty {
+  padding: 60px 20px;
+  text-align: center;
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
+}
 
-  button {
-    padding: 8px 20px;
-    border: none;
-    border-radius: 10px;
-    font-size: 0.875rem;
-    font-family: inherit;
-    font-weight: 500;
-    cursor: pointer;
+.empty p { font-size: 1rem; font-weight: 500; }
+.empty-hint { font-size: 0.875rem; color: var(--muted); font-weight: 400; }
 
-    &:first-child {
-      background: var(--color-primary);
-      color: #fff;
-    }
+/* ── Backdrop ── */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 90;
+}
 
-    &:last-child {
-      background: var(--color-bg);
-      color: var(--color-muted);
-    }
+/* ── Menu sheet ── */
+.menu-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border-radius: 20px 20px 0 0;
+  border-top: 1px solid var(--border);
+  padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 640px;
+  margin: 0 auto;
+
+  @media (min-width: 768px) {
+    bottom: auto;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -50%);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 12px 16px 20px;
+    width: 360px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
   }
 }
 
-.share-btn {
-  display: inline-flex;
+.menu-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 999px;
+  margin: 0 auto 16px;
+
+  @media (min-width: 768px) {
+    display: none;
+  }
+}
+
+.menu-item {
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 14px;
+  width: 100%;
+  padding: 16px;
   background: none;
   border: none;
-  color: var(--color-muted);
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--text);
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 8px;
-  transition: color 0.2s;
-
-  span {
-    font-size: 0.8rem;
-    font-family: inherit;
-    font-weight: 500;
-  }
+  text-align: left;
+  transition: background 0.15s;
 
   @media (hover: hover) {
-    &:hover {
-      color: var(--color-text);
-    }
+    &:hover { background: var(--bg-subtle); }
+  }
+}
+
+.menu-item--danger { color: var(--danger); }
+
+.menu-item--cancel {
+  justify-content: center;
+  margin-top: 4px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* ── Pannello nota ── */
+.note-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border-radius: 20px 20px 0 0;
+  border-top: 1px solid var(--border);
+  padding: 12px 20px calc(32px + env(safe-area-inset-bottom));
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 640px;
+  margin: 0 auto;
+
+  @media (min-width: 768px) {
+    bottom: auto;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -50%);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 20px 24px 24px;
+    width: 480px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  }
+}
+
+.note-sheet-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.note-textarea {
+  width: 100%;
+  min-height: 100px;
+  max-height: 240px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: var(--bg-subtle);
+  color: var(--text);
+  padding: 12px 14px;
+  resize: none;
+  line-height: 1.6;
+
+  &::placeholder { color: var(--muted); }
+}
+
+.note-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.note-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.note-clear {
+  height: 36px;
+  padding: 0 16px;
+  background: none;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.note-delete {
+  height: 36px;
+  padding: 0 20px;
+  background: none;
+  color: var(--danger);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.note-done {
+  height: 36px;
+  padding: 0 24px;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: calc(var(--bottom-h) + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 999px;
+  z-index: 200;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.toast-enter-active { transition: opacity 0.2s, transform 0.2s; }
+.toast-leave-active { transition: opacity 0.3s, transform 0.3s; }
+.toast-enter-from  { opacity: 0; transform: translateX(-50%) translateY(8px); }
+.toast-leave-to    { opacity: 0; transform: translateX(-50%) translateY(8px); }
+
+/* ── Transizioni ── */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.slide-up-enter-active, .slide-up-leave-active {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+}
+.slide-up-enter-from, .slide-up-leave-to { transform: translateY(100%); }
+
+@media (min-width: 768px) {
+  .slide-up-enter-active, .slide-up-leave-active {
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .slide-up-enter-from, .slide-up-leave-to {
+    transform: translate(-50%, -48%);
+    opacity: 0;
   }
 }
 </style>

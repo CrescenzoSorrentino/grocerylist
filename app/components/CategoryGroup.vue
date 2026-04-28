@@ -1,62 +1,49 @@
 <script setup>
-// PROPS — dati ricevuti dal genitore (index.vue).
-// "category" è una stringa con il nome del gruppo, es. "Dairy".
-// "items" è l'array degli elementi che appartengono a quella categoria.
-// "editingNoteIndex" è l'indice dell'item con la nota aperta; viene passato
-// giù a GroceryItem così sa se mostrare o nascondere il campo nota.
-defineProps({
+// CategoryGroup visualizza una categoria con i suoi item.
+// Riceve il nome della categoria e l'array degli item come props.
+// Il colore del bordo sinistro viene letto da store.categoryColors
+// e passato al CSS tramite v-bind() — nessun prop aggiuntivo necessario.
+const store = useGroceryStore();
+
+const props = defineProps({
   category: String,
   items: Array,
-  editingNoteIndex: Number,
 });
 
-// EMIT — questo componente è nel mezzo della catena:
-// riceve gli eventi da GroceryItem (figlio) e li rilancia verso index.vue (genitore).
-// "update-note" passa due argomenti (index, text), quindi non usa $event
-// ma una arrow function esplicita per non perdere il secondo valore.
-const emit = defineEmits(["toggle", "note", "update-note", "remove"]);
+// Colore della categoria, con fallback grigio neutro se non trovato.
+const color = computed(() => store.categoryColors[props.category ?? ""] ?? "#94a3b8");
 </script>
 
 <template>
-  <div>
-    <!-- Titolo della categoria, es. "DAIRY", "FRUIT"... -->
+  <div class="group">
+    <!-- Titolo del gruppo libero sopra il bordo colorato -->
     <p class="category-label">{{ category }}</p>
-
     <ul>
-      <!-- v-for crea un GroceryItem per ogni elemento dell'array "items".
-           :key serve a Vue per tenere traccia di ogni elemento in modo univoco.
-           :item passa l'oggetto elemento al componente figlio (prop). -->
-      <GroceryItem
-        v-for="item in items"
-        :key="item.index"
-        :item="item"
-        :editing-note-index="editingNoteIndex"
-        @toggle="emit('toggle', $event)"
-        @note="emit('note', $event)"
-        @update-note="(index, text) => emit('update-note', index, text)"
-        @remove="emit('remove', $event)"
-      />
-      <!-- @toggle e @remove ascoltano gli eventi che arrivano da GroceryItem.
-           $event è il valore che GroceryItem ha passato (l'indice dell'elemento).
-           Li rilancia subito verso index.vue senza modificarli. -->
+      <!-- :key usa item.id — stabile anche se l'array viene riordinato o filtrato -->
+      <GroceryItem v-for="item in items" :key="item.id" :item="item" />
     </ul>
   </div>
 </template>
 
 <style scoped>
+.group {
+  margin: 0 20px 16px;
+  break-inside: avoid; /* impedisce che il gruppo venga spezzato tra due colonne */
+}
+
 .category-label {
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--color-muted);
-  padding: 10px 20px 6px;
-  border-top: 1px solid var(--color-border);
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  padding: 20px 0 8px 0;
 }
 
 ul {
   list-style: none;
   padding: 0;
   margin: 0;
+  border-left: 2px solid v-bind(color); /* bordo colorato solo sugli item, non sul titolo */
 }
 </style>

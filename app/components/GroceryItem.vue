@@ -1,56 +1,35 @@
 <script setup>
-import { NotepadText, Trash2 } from "lucide-vue-next";
+// GroceryItem visualizza un singolo elemento della lista.
+// Cliccando sulla riga si apre il pannello note/azioni (toggleNote).
+// Il checkbox è indipendente — stoppa la propagazione per non aprire il pannello.
+// Non usa emit: interagisce direttamente con lo store.
+const store = useGroceryStore();
 
-// PROPS — dati che questo componente riceve dall'esterno (dal genitore).
-// "item" è un oggetto con questa forma: { name, done, category, note, index }.
-// "editingNoteIndex" arriva da index.vue (passando per CategoryGroup): se vale
-// lo stesso indice di questo item, il campo nota viene mostrato.
-// Le props non si modificano qui dentro: si leggono e basta.
-defineProps({
-  item: Object,
-  editingNoteIndex: Number,
+const props = defineProps({
+  item: Object, // { id, name, done, category, note }
 });
 
-// EMIT — eventi che questo componente lancia verso il genitore.
-// "update-note" passa due argomenti: l'indice dell'item e il testo scritto.
-const emit = defineEmits(["toggle", "note", "update-note", "remove"]);
+// Tinta hover derivata dal colore della categoria con ~7% di opacità (hex "12").
+// v-bind() nel CSS la applica dinamicamente senza prop aggiuntivi.
+const hoverColor = computed(() =>
+  (store.categoryColors[props.item?.category ?? ""] ?? "#94a3b8") + "12"
+);
 </script>
 
 <template>
-  <!-- La classe CSS "done" viene aggiunta solo se item.done è true.
-       Il : davanti a "class" significa che il valore è dinamico (calcolato da JS). -->
-  <li :class="{ done: item.done }">
-
-    <!-- Checkbox: la spunta rispecchia item.done.
-         Al click lancia l'evento "toggle" passando l'indice,
-         così il genitore sa quale elemento deve aggiornare. -->
-    <input type="checkbox" :checked="item.done" @change="emit('toggle', item.index)" />
-
-    <!-- Nome dell'elemento, con le doppie graffe per mostrare il valore della variabile. -->
-    <span>{{ item.name }}</span>
-
-    <div class="item-actions">
-      <button class="btn-note" @click="emit('note', item.index)">
-        <NotepadText :size="15" />
-      </button>
-
-      <!-- Pulsante cestino: al click lancia "remove" con l'indice dell'elemento. -->
-      <button class="btn-remove" @click="emit('remove', item.index)">
-        <Trash2 :size="15" />
-      </button>
-    </div>
-
-  </li>
-
-  <!-- Campo nota: visibile solo quando editingNoteIndex corrisponde a questo item. -->
-  <li v-if="editingNoteIndex === item.index" class="note-row">
+  <!-- @click apre il pannello note; il checkbox usa @click.stop per non propagare -->
+  <li :class="{ done: item.done }" @click="store.toggleNote(item.id)">
     <input
-      class="note-input"
-      type="text"
-      placeholder="Add a note..."
-      :value="item.note"
-      @input="emit('update-note', item.index, $event.target.value)"
+      type="checkbox"
+      :checked="item.done"
+      @change.stop="store.toggleItem(item.id)"
+      @click.stop
     />
+    <div class="item-body">
+      <span class="name">{{ item.name }}</span>
+      <!-- Anteprima nota: visibile quando esiste una nota e il pannello è chiuso -->
+      <span v-if="item.note" class="note-preview">{{ item.note }}</span>
+    </div>
   </li>
 </template>
 
@@ -59,84 +38,48 @@ li {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 56px;
-  padding: 12px 20px;
+  min-height: 50px;
+  padding: 8px 20px;
+  cursor: pointer;
   transition: background 0.15s;
 
   @media (hover: hover) {
-    &:hover {
-      background: var(--color-hover);
-    }
+    &:hover { background: v-bind(hoverColor); }
   }
 }
 
 input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   cursor: pointer;
-  accent-color: var(--color-primary);
+  accent-color: var(--text);
   touch-action: manipulation;
 }
 
-li span {
+.item-body {
   flex: 1;
-  font-size: 0.95rem;
-}
-
-li.done span {
-  text-decoration: line-through;
-  color: var(--color-muted);
-}
-
-.item-actions {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0; /* necessario per text-overflow sul figlio */
 }
 
-.btn-note,
-.btn-remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  color: var(--color-muted);
-  cursor: pointer;
-  min-width: 44px;
-  min-height: 44px;
-  border-radius: 12px;
-  transition: color 0.2s;
-  touch-action: manipulation;
+.name {
+  font-size: 0.95rem;
+  line-height: 1.4;
 }
 
-.btn-remove {
-  @media (hover: hover) {
-    &:hover {
-      color: var(--color-danger);
-    }
-  }
+li.done .name {
+  text-decoration: line-through;
+  color: var(--muted);
 }
 
-.note-row {
-  min-height: unset;
-  padding: 0 20px 12px;
-
-  /* disabilita l'hover ereditato dalla regola li generale */
-  &:hover {
-    background: none;
-  }
-}
-
-.note-input {
-  width: 100%;
-  border: none;
-  border-bottom: 1px solid var(--color-border);
-  outline: none;
-  font-size: 0.875rem;
-  font-family: inherit;
-  background: transparent;
-  color: var(--color-muted);
-  padding: 4px 0;
+.note-preview {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

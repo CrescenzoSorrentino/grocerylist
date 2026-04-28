@@ -1,125 +1,109 @@
 <script setup>
-// PROPS — l'array delle categorie disponibili arriva da index.vue.
-// Le teniamo lì invece che qui perché sono un dato "globale" dell'app,
-// non specifico di questo componente.
-const props = defineProps({
-  categories: Array,
-});
+// AddBar è la barra fissa in basso per aggiungere nuovi item.
+// Legge le categorie dallo store e chiama store.addItem() direttamente —
+// nessuna prop in ingresso, nessun evento in uscita.
+const store = useGroceryStore();
 
-// EMIT — quando l'utente aggiunge un elemento, questo componente non tocca
-// l'array "items" direttamente (non lo conosce nemmeno).
-// Lancia l'evento "add" verso index.vue con i dati del nuovo elemento.
-const emit = defineEmits(["add"]);
-
-// Stato locale: questi dati esistono solo dentro questo componente.
-// newItem tiene il testo che l'utente sta scrivendo nell'input.
+// Stato locale: visibile solo in questo componente.
 const newItem = ref("");
-// selectedCategory tiene la categoria scelta nel select, "Other" come default.
 const selectedCategory = ref("Other");
 
 function addItem() {
-  const testo = newItem.value.trim(); // .trim() rimuove spazi iniziali e finali
-  if (!testo) return; // blocca se l'input è vuoto
-
-  // Lancia l'evento "add" verso index.vue passando un oggetto con nome e categoria.
-  emit("add", { name: testo, category: selectedCategory.value });
-
+  const text = newItem.value.trim();
+  if (!text) return;
+  store.addItem(text, selectedCategory.value);
   newItem.value = ""; // svuota l'input dopo l'aggiunta
 }
 </script>
 
 <template>
   <div class="add-bar">
+    <select v-model="selectedCategory">
+      <option v-for="cat in store.categories" :key="cat" :value="cat">{{ cat }}</option>
+    </select>
 
-    <!-- v-model collega l'input alla variabile "newItem" in modo bidirezionale:
-         se l'utente scrive, newItem si aggiorna; se newItem cambia da codice, l'input si aggiorna.
-         @keyup.enter permette di aggiungere l'elemento premendo Invio. -->
     <input
       v-model="newItem"
       placeholder="Add an item..."
       @keyup.enter="addItem"
     />
 
-    <!-- v-model fa lo stesso con "selectedCategory".
-         v-for genera un'opzione per ogni categoria nell'array ricevuto via props. -->
-    <select v-model="selectedCategory">
-      <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
-    </select>
-
     <button @click="addItem">Add</button>
-
   </div>
 </template>
 
 <style scoped>
 .add-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--bottom-h);
+  background: var(--bg);
+  border-top: 1px solid var(--border);
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  padding: 12px 16px;
   gap: 8px;
+  padding: 0 16px;
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 40;
+  max-width: 640px;
+  margin: 0 auto;
+
+  @media (min-width: 768px) {
+    max-width: 960px;
+    padding: 0 24px;
+  }
+
+  @media (min-width: 1200px) {
+    max-width: 1280px;
+  }
 }
 
-.add-bar input {
-  flex: 1 1 100%;
-  border: none;
+select {
+  flex-shrink: 0;
+  border: 1px solid var(--border);
   outline: none;
-  font-size: 1rem;
+  font-size: 0.8rem;
   font-family: inherit;
-  background: transparent;
-  color: var(--color-text);
-  min-height: 44px;
-  touch-action: manipulation;
+  background: var(--bg-subtle);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  height: 36px;
 }
 
-.add-bar select {
+input {
   flex: 1;
   border: none;
   outline: none;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   font-family: inherit;
-  background: var(--color-bg);
-  color: var(--color-muted);
-  border-radius: 12px;
-  padding: 8px 12px;
-  min-height: 44px;
-  cursor: pointer;
-  touch-action: manipulation;
+  background: transparent;
+  color: var(--text);
+  height: 36px;
+
+  &::placeholder { color: var(--muted); }
 }
 
-.add-bar button {
-  min-height: 44px;
-  padding: 8px 24px;
-  background: var(--color-primary);
+button {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 20px;
+  background: var(--text);
   color: #fff;
   border: none;
-  border-radius: 12px;
-  font-size: 0.9rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
   font-family: inherit;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.15s;
   touch-action: manipulation;
 
   @media (hover: hover) {
-    &:hover {
-      background: var(--color-primary-hover);
-    }
-  }
-}
-
-@media (min-width: 540px) {
-  .add-bar {
-    flex-wrap: nowrap;
-    padding: 8px 8px 8px 20px;
-  }
-
-  .add-bar input {
-    flex: 1 1 auto;
-  }
-
-  .add-bar select {
-    flex: 0 0 auto;
+    &:hover { background: var(--primary-hover); }
   }
 }
 </style>
